@@ -170,19 +170,16 @@ export async function checkRateLimit(
  * @returns Promise that resolves after the specified delay
  */
 export async function delayRequest(seconds: number): Promise<void> {
-  return new Promise((resolve) => {
-    // Use a simple delay implementation for Workers environment
-    const start = Date.now();
-    const checkTime = () => {
-      if (Date.now() - start >= seconds * 1000) {
-        resolve();
-      } else {
-        // Use minimal delay to prevent blocking
-        Promise.resolve().then(checkTime);
-      }
-    };
-    checkTime();
-  });
+  /**
+   * `setTimeout` rather than polling `Date.now()`: a spin loop bills every
+   * millisecond of the delay as CPU time, and on Workers it never terminates
+   * at all, because `Date.now()` only advances after I/O. The previous
+   * implementation burned the full CPU limit on every backoff and killed the
+   * request it was meant to retry.
+   */
+  const { promise, resolve } = Promise.withResolvers<void>();
+  setTimeout(resolve, seconds * 1000);
+  return promise;
 }
 
 /**

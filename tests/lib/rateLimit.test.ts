@@ -89,6 +89,25 @@ describe("Rate Limit Module", () => {
       expect(endTime - startTime).toBeGreaterThanOrEqual(90);
     });
 
+    it("should not starve timers while waiting", async () => {
+      /**
+       * The regression this guards: a `Date.now()` spin loop resolves after the
+       * right amount of wall time, so a duration assertion alone passes either
+       * way. What it never does is yield to the macrotask queue — it monopolises
+       * the thread, billing the whole delay as CPU, and on Workers it cannot
+       * terminate at all because `Date.now()` only advances after I/O. A timer
+       * scheduled to fire midway through the delay therefore still fires on time.
+       */
+      let timerFired = false;
+      setTimeout(() => {
+        timerFired = true;
+      }, 25);
+
+      await delayRequest(0.2);
+
+      expect(timerFired).toBe(true);
+    });
+
     it("should handle zero delay", async () => {
       const startTime = Date.now();
       await delayRequest(0);
