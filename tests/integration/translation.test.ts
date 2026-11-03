@@ -2,6 +2,14 @@
  * Integration tests for translation functionality
  */
 
+import { API_URL } from "../../src/lib/const";
+
+// The version lookup is network I/O with its own tests (appVersion.test.ts);
+// keep the translation flow deterministic.
+jest.mock("../../src/lib/appVersion", () => ({
+  resolveDeepLAppVersion: jest.fn().mockResolvedValue("26.52"),
+}));
+
 describe("Translation Integration Tests", () => {
   let mockEnv: Env;
 
@@ -20,11 +28,7 @@ describe("Translation Integration Tests", () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            result: {
-              texts: [{ text: "你好世界" }],
-              lang: "ZH",
-            },
-            id: 12345,
+            translations: [{ text: "你好世界" }],
           }),
       });
 
@@ -41,7 +45,9 @@ describe("Translation Integration Tests", () => {
 
       expect(result.code).toBe(200);
       expect(result.data).toBe("你好世界");
-      expect(result.source_lang).toBe("ZH");
+      // oneshot answers without detected_source_language here, so the
+      // requested source is echoed back.
+      expect(result.source_lang).toBe("EN");
       expect(result.target_lang).toBe("ZH");
     });
 
@@ -56,7 +62,7 @@ describe("Translation Integration Tests", () => {
 
       const result = await checkCombinedRateLimit(
         `blocked-client-${Date.now()}`,
-        "https://www2.deepl.com/jsonrpc",
+        API_URL,
         mockEnv
       );
 
@@ -94,11 +100,7 @@ describe("Translation Integration Tests", () => {
           ok: true,
           json: () =>
             Promise.resolve({
-              result: {
-                texts: [{ text: "你好世界" }],
-                lang: "ZH",
-              },
-              id: 12345,
+              translations: [{ text: "你好世界" }],
             }),
         });
 
@@ -120,15 +122,13 @@ describe("Translation Integration Tests", () => {
 
   describe("Error handling integration", () => {
     it("should handle API errors gracefully", async () => {
-      // Mock API error response
+      // Mock DeepL refusing the client profile (outdated client / blocked)
       global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
+        ok: false,
+        status: 403,
         json: () =>
           Promise.resolve({
-            error: {
-              code: 1156049,
-              message: "Invalid request format",
-            },
+            title: "OutdatedClient",
           }),
       });
 
@@ -157,11 +157,7 @@ describe("Translation Integration Tests", () => {
           ok: true,
           json: () =>
             Promise.resolve({
-              result: {
-                texts: [{ text: "你好世界" }],
-                lang: "ZH",
-              },
-              id: 12345,
+              translations: [{ text: "你好世界" }],
             }),
         });
 
@@ -187,11 +183,7 @@ describe("Translation Integration Tests", () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            result: {
-              texts: [{ text: "你好世界" }],
-              lang: "ZH",
-            },
-            id: 12345,
+            translations: [{ text: "你好世界" }],
           }),
       });
 

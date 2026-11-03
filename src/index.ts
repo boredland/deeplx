@@ -14,7 +14,10 @@ import {
 
 import { rejectUnauthorized } from "./lib/apiKey";
 import { PAYLOAD_LIMITS } from "./lib/config";
-import { createErrorResponse } from "./lib/errorHandler";
+import {
+  createErrorResponse,
+  isPayloadTooLargeError,
+} from "./lib/errorHandler";
 import { normalizeLanguageCode } from "./lib/query";
 import {
   getSecureClientIP,
@@ -221,8 +224,8 @@ async function handleTranslation(c: any, provider: "deepl" | "google") {
  * Rephrase handler
  *
  * Deliberately not folded into handleTranslation: that path picks a provider,
- * normalizes a source/target language pair and speaks one-shot JSON-RPC.
- * Rephrase has one provider, no source language, and holds a stateful
+ * normalizes a source/target language pair and speaks DeepL's oneshot REST
+ * call. Rephrase has one provider, no source language, and holds a stateful
  * WebSocket session. Sharing the function would mean branching on provider in
  * six places to reunite two unrelated protocols.
  * @param c - Hono context
@@ -393,11 +396,10 @@ app
             sanitized_text_length: sanitizedText.length,
             has_source_lang: !!sourceLang,
             has_target_lang: !!targetLang,
-            request_id: parsedBody.id,
-            timestamp: parsedBody.params?.timestamp,
-            method_format: requestBody.includes('"method" : "')
-              ? "spaced"
-              : "normal",
+            usage_type: parsedBody.usage_type,
+            target_lang: parsedBody.target_lang,
+            source_lang: parsedBody.source_lang ?? "auto",
+            app_version: parsedBody.app_information?.app_version,
             normalized_source_lang: sourceLang,
             normalized_target_lang: targetLang,
           },
@@ -412,7 +414,8 @@ app
           buildError instanceof Error
             ? buildError.message
             : "Request build failed";
-        return c.json(createStandardResponse(400, errorMessage), 400);
+        const status = isPayloadTooLargeError(buildError) ? 413 : 400;
+        return c.json(createStandardResponse(status, errorMessage), status);
       }
     } catch (error) {
       const errorMessage =

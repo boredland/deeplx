@@ -1,29 +1,7 @@
 /**
  * IP rotation and proxy management for DeepLX
- * Handles proxy selection, browser fingerprinting, and request routing
+ * Handles proxy selection and request routing
  */
-
-/**
- * Collection of realistic browser user agents for fingerprinting
- */
-const USER_AGENTS = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0",
-];
-
-/**
- * Collection of realistic accept-language headers for regional diversity
- */
-const ACCEPT_LANGUAGES = [
-  "en-US,en;q=0.9",
-  "en-GB,en;q=0.9",
-  "en-US,en;q=0.8,es;q=0.6",
-  "en-US,en;q=0.9,fr;q=0.8",
-  "en-US,en;q=0.9,de;q=0.8",
-];
 
 /**
  * Get available proxy endpoints from environment configuration
@@ -64,22 +42,4 @@ export async function selectProxy(env: Env): Promise<ProxyEndpoint | null> {
     console.error("Failed to select proxy:", error);
     return null;
   }
-}
-
-/**
- * Generate realistic browser fingerprint headers
- * Creates randomized headers to mimic real browser requests
- * @returns Record<string, string> - Object containing HTTP headers
- */
-export function generateBrowserFingerprint(): Record<string, string> {
-  return {
-    "User-Agent": USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)],
-    "Accept-Language":
-      ACCEPT_LANGUAGES[Math.floor(Math.random() * ACCEPT_LANGUAGES.length)],
-    Accept: "application/json, text/plain, */*",
-    "Accept-Encoding": "gzip, deflate, br",
-    DNT: "1",
-    Connection: "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-  };
 }

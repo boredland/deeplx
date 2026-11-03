@@ -2,6 +2,11 @@
  * Performance and load tests
  */
 
+// Keep the suite off the network: the version resolver has its own tests.
+jest.mock("../../src/lib/appVersion", () => ({
+  resolveDeepLAppVersion: jest.fn().mockResolvedValue("26.52"),
+}));
+
 describe("Performance Tests", () => {
   let mockEnv: Env;
 
@@ -19,11 +24,7 @@ describe("Performance Tests", () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            result: {
-              texts: [{ text: "你好世界" }],
-              lang: "ZH",
-            },
-            id: 12345,
+            translations: [{ text: "你好世界" }],
           }),
       });
 
@@ -111,11 +112,7 @@ describe("Performance Tests", () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            result: {
-              texts: [{ text: "你好世界" }],
-              lang: "ZH",
-            },
-            id: 12345,
+            translations: [{ text: "你好世界" }],
           }),
       });
 
@@ -179,11 +176,7 @@ describe("Performance Tests", () => {
           ok: true,
           json: () =>
             Promise.resolve({
-              result: {
-                texts: [{ text: "你好世界" }],
-                lang: "ZH",
-              },
-              id: 12345,
+              translations: [{ text: "你好世界" }],
             }),
         });
 
@@ -216,11 +209,7 @@ describe("Performance Tests", () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            result: {
-              texts: [{ text: "你好世界" }],
-              lang: "ZH",
-            },
-            id: 12345,
+            translations: [{ text: "你好世界" }],
           }),
       });
 

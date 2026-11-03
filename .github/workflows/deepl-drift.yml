@@ -1,0 +1,119 @@
+name: DeepL drift check
+
+# DeepL's free oneshot endpoint is undocumented and changes without notice.
+# This job translates a sentence daily and opens an issue when the answer is
+# not a real translation. It exists to catch the failure mode that hides
+# behind HTTP 200: once the advertised client profile goes stale, DeepL
+# answers with its "older version of DeepL" notice instead of translating.
+#
+# The advertised app version resolves itself at runtime (src/lib/appVersion.ts),
+# so an app release alone does not fail this check — only an actual protocol
+# change does.
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Translate through the worker
+        id: probe
+        env:
+          DEEPLX_API_KEY: ${{ secrets.DEEPLX_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${DEEPLX_API_KEY:-}" ]; then
+            ENDPOINT="https://translate.jonas-strassel.de/deepl"
+            KEY="$DEEPLX_API_KEY"
+            echo "Probing the production worker at $ENDPOINT"
+          else
+            ENDPOINT="http://127.0.0.1:8799/deepl"
+            KEY="ci-drift-check"
+            echo "No DEEPLX_API_KEY secret; probing a local wrangler dev worker"
+            npx wrangler dev --port 8799 --var API_KEYS:ci-drift-check \
+              > /tmp/wrangler.log 2>&1 &
+            echo "$!" > /tmp/wrangler.pid
+            for _ in $(seq 1 60); do
+              if curl -s -o /dev/null "http://127.0.0.1:8799/"; then break; fi
+              sleep 1
+            done
+          fi
+
+          RESPONSE=$(curl -sS -m 60 -X POST "$ENDPOINT" \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $KEY" \
+            -d '{"text":"Good morning","source_lang":"en","target_lang":"de"}')
+          echo "Response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -qiE 'older version|ältere version|ancienne version|старую версию'; then
+            echo "::error::DeepL returned its outdated-client notice instead of a translation"
+            exit 1
+          fi
+
+          if ! echo "$RESPONSE" | grep -q '"code":200'; then
+            echo "::error::Translation request failed"
+            exit 1
+          fi
+
+          # The answer must actually be German, not an echo or a placeholder.
+          if ! echo "$RESPONSE" | grep -qiE 'guten morgen|morgen'; then
+            echo "::error::Response is not the expected translation"
+            exit 1
+          fi
+
+      - name: Stop local worker
+        if: always()
+        run: |
+          if [ -f /tmp/wrangler.pid ]; then
+            kill "$(cat /tmp/wrangler.pid)" 2>/dev/null || true
+          fi
+
+      - name: Report drift
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh label create deepl-drift \
+            --color d73a4a \
+            --description "Automated DeepL upstream drift check" 2>/dev/null || true
+
+          BODY="The scheduled DeepL drift check failed on $(date -u +%Y-%m-%dT%H:%M:%SZ).
+
+          Expected a German translation of \"Good morning\" from \`/deepl\`; the probe did not get one.
+          This usually means DeepL changed the free oneshot API or the client profile it expects.
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Reference implementation: https://github.com/OwO-Network/DLX (\`translate/translate.go\`, \`translate/appversion.go\`)."
+
+          EXISTING=$(gh issue list --label deepl-drift --state open --limit 1 \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "DeepL upstream drift detected" \
+              --label deepl-drift --body "$BODY"
+          fi

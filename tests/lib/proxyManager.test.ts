@@ -2,11 +2,7 @@
  * Tests for proxy management functionality
  */
 
-import {
-  generateBrowserFingerprint,
-  getProxyEndpoints,
-  selectProxy,
-} from "../../src/lib/proxyManager";
+import { getProxyEndpoints, selectProxy } from "../../src/lib/proxyManager";
 
 describe("Proxy Manager Module", () => {
   let mockEnv: Env;
@@ -17,29 +13,6 @@ describe("Proxy Manager Module", () => {
 
   afterEach(() => {
     jest.clearAllMocks();
-  });
-
-  describe("generateBrowserFingerprint", () => {
-    it("should generate browser-like headers", () => {
-      const fingerprint = generateBrowserFingerprint();
-
-      expect(fingerprint).toHaveProperty("User-Agent");
-      expect(fingerprint).toHaveProperty("Accept");
-      expect(fingerprint).toHaveProperty("Accept-Language");
-      expect(fingerprint).toHaveProperty("Accept-Encoding");
-      expect(fingerprint).toHaveProperty("DNT");
-      expect(fingerprint).toHaveProperty("Connection");
-      expect(fingerprint).toHaveProperty("Upgrade-Insecure-Requests");
-    });
-
-    it("should generate string header values", () => {
-      const fingerprint = generateBrowserFingerprint();
-
-      Object.values(fingerprint).forEach((value) => {
-        expect(typeof value).toBe("string");
-        expect(value.length).toBeGreaterThan(0);
-      });
-    });
   });
 
   describe("getProxyEndpoints", () => {

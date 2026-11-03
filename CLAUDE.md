@@ -44,7 +44,7 @@ DeepLX is a serverless translation service optimized for Cloudflare Workers. It 
 ### Core Components
 
 #### Translation Providers
-- **DeepL Query Engine** ([src/lib/query.ts](src/lib/query.ts)): Main translation logic for DeepL using JSONRPC API
+- **DeepL Query Engine** ([src/lib/query.ts](src/lib/query.ts)): Main translation logic for DeepL via the free oneshot endpoint, advertising the iOS client profile (app version resolved at runtime by [src/lib/appVersion.ts](src/lib/appVersion.ts))
 - **Google Translate Service** ([src/lib/services/googleTranslate.ts](src/lib/services/googleTranslate.ts)): Google Translate integration
 
 #### Support Systems
@@ -76,7 +76,7 @@ All endpoints use the same `handleTranslation()` function with a provider parame
 
 Required environment variables in [wrangler.jsonc](wrangler.jsonc):
 - `DEBUG_MODE` - Enable debug endpoint (default: "false")
-- `PROXY_URLS` - Comma-separated list of XDPL proxy endpoints for DeepL
+- `PROXY_URLS` - Optional comma-separated proxy endpoints that forward DeepL oneshot POSTs; the body is the oneshot JSON, not JSON-RPC
 
 Required KV namespaces:
 - `CACHE_KV` - Translation result cache
@@ -90,6 +90,12 @@ Required bindings:
 The worker includes a scheduled event handler that runs every 5 minutes (configured in `wrangler.jsonc` triggers):
 - Clears in-memory cache to prevent memory leaks
 - Called via `handleScheduled()` in [src/index.ts](src/index.ts)
+
+### Upstream Drift Protection
+
+DeepL's free oneshot endpoint is undocumented and changes without notice:
+- **App version**: resolved at runtime from the App Store (`src/lib/appVersion.ts`), cached 24h, fallback to the pinned constant. A stale advertised version makes DeepL answer every request with 429.
+- **Protocol shape**: a scheduled GitHub Actions workflow (`.github/workflows/deepl-drift.yml`) translates a sentence through the worker daily and opens an issue when the response is not a real translation. It detects the failure mode that hides behind HTTP 200: DeepL's "older version of DeepL" notice.
 
 ## Key Implementation Details
 

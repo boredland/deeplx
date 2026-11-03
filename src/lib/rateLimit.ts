@@ -4,6 +4,7 @@
  */
 
 import { RATE_LIMIT_CONFIG, calculateDynamicRateLimits } from "./config";
+import { API_URL } from "./const";
 import { getProxyEndpoints } from "./proxyManager";
 
 // Import types from worker-configuration for consistency
@@ -222,7 +223,7 @@ export async function checkCombinedRateLimit(
   }
 
   // If endpoint exists, check proxy rate limit
-  if (endpoint && endpoint !== "https://www2.deepl.com/jsonrpc") {
+  if (endpoint && endpoint !== API_URL) {
     const proxyAllowed = await checkProxyRateLimit(endpoint, env);
     if (!proxyAllowed) {
       return { allowed: false, reason: "Proxy rate limit exceeded" };

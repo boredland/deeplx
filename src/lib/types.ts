@@ -16,20 +16,15 @@ export type SourceLang = string | "auto";
 export type TargetLang = string;
 
 /**
- * Raw response parameters from DeepL API
- * Represents the exact structure returned by the translation service
+ * Response from DeepL's oneshot endpoint
+ * (POST https://oneshot-free.www.deepl.com/v1/translate). Translations answer
+ * positionally, but this service always sends exactly one text.
  */
-export type RawResponseParams = {
-  jsonrpc: string;
-  id: number;
-  result: {
-    texts: {
-      text: string;
-    }[];
-    lang: string;
-    lang_is_confident: boolean;
-    detectedLanguages: { unsupported: number } & Record<string, number>;
-  };
+export type OneshotResponseParams = {
+  translations: {
+    text: string;
+    detected_source_language?: string;
+  }[];
 };
 
 /**

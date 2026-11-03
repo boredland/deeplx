@@ -113,9 +113,9 @@ graph TB
 
     %% External Services
     subgraph "External Translation APIs"
-        DeepLAPI[DeepL JSONRPC API<br/>www2.deepl.com]
+        DeepLAPI[DeepL oneshot API<br/>oneshot-free.www.deepl.com]
         GoogleAPI[Google Translate API<br/>translate.google.com]
-        XDPL[XDPL Proxy Cluster<br/>Multiple Vercel Instances]
+        XDPL[Forwarding Proxies<br/>Optional]
     end
 
     %% Request Flow Connections
@@ -440,21 +440,16 @@ npx wrangler deploy
 
 ## Proxy Endpoint Deployment
 
-For optimal performance and stability, it's recommended to deploy as many [XDPL](https://github.com/xixu-me/XDPL) proxy endpoints as possible:
-
-### Quick Deploy XDPL
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/xixu-me/XDPL)
+`PROXY_URLS` is optional. Each entry must be an HTTP endpoint that accepts the DeepL **oneshot** request and forwards it to `https://oneshot-free.www.deepl.com/v1/translate` — the same JSON body DeepLX sends (`text[]`, `target_lang`, `source_lang`, `usage_type`, `app_information`). Proxies written for the retired JSON-RPC backend (`/jsonrpc` paths) will not work: DeepL no longer answers that protocol.
 
 ### Configure Proxy Endpoints
 
-1. Deploy multiple XDPL instances
-2. Add the deployed URLs to DeepLX's `PROXY_URLS` environment variable:
+Add the deployed URLs to DeepLX's `PROXY_URLS` environment variable:
 
 ```jsonc
 {
   "vars": {
-    "PROXY_URLS": "https://your-xdpl-1.vercel.app/jsonrpc,https://your-xdpl-2.vercel.app/jsonrpc,https://your-xdpl-3.vercel.app/jsonrpc,https://your-xdpl-n.vercel.app/jsonrpc"
+    "PROXY_URLS": "https://your-proxy-1.example.com/v1/translate,https://your-proxy-2.example.com/v1/translate"
   }
 }
 ```
@@ -721,7 +716,6 @@ curl -X POST https://your-domain.workers.dev/debug \
 - [OwO-Network/DeepLX](https://github.com/OwO-Network/DeepLX) - Original implementation based on Go programming language
 - [Cloudflare Workers](https://workers.cloudflare.com/) - Hosting platform
 - [Hono](https://hono.dev/) - Fast web framework
-- [XDPL](https://github.com/xixu-me/XDPL) - Proxy endpoint solution
 
 ### Get Involved
 

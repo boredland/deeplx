@@ -7,6 +7,25 @@ import {
   normalizeLanguageCode,
   query,
 } from "../../src/lib/query";
+import { MAX_FREE_TEXT_LENGTH } from "../../src/lib/const";
+import type { RequestParams } from "../../src/lib/types";
+
+// The version lookup is network I/O with its own tests (appVersion.test.ts);
+// keep this suite focused on the translation request itself.
+jest.mock("../../src/lib/appVersion", () => ({
+  resolveDeepLAppVersion: jest.fn().mockResolvedValue("26.52"),
+}));
+
+/**
+ * Minimal stand-in for a fetch Response, carrying only what query() reads.
+ */
+function jsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.resolve(body),
+  } as unknown as Response;
+}
 
 describe("Query Module", () => {
   let mockEnv: Env;
@@ -43,40 +62,70 @@ describe("Query Module", () => {
   });
 
   describe("buildRequestBody", () => {
-    it("should build valid request body", () => {
+    it("should build a valid oneshot request body", () => {
       const params = {
         text: "Hello world",
         source_lang: "en",
         target_lang: "zh",
       };
 
-      const body = buildRequestBody(params);
+      const body = buildRequestBody(params, "26.52");
       const parsed = JSON.parse(body);
 
-      expect(parsed.jsonrpc).toBe("2.0");
-      expect(parsed.method).toBe("LMT_handle_texts");
-      expect(parsed.params.texts[0].text).toBe("Hello world");
-      expect(parsed.params.lang.source_lang_user_selected).toBe("EN");
-      expect(parsed.params.lang.target_lang).toBe("ZH");
+      expect(parsed.text).toEqual(["Hello world"]);
+      expect(parsed.target_lang).toBe("zh-Hans");
+      expect(parsed.source_lang).toBe("en");
+      expect(parsed.usage_type).toBe("translate");
+      expect(parsed.app_information).toMatchObject({
+        os: "iOS",
+        os_version: "26.0",
+        app_version: "26.52",
+        app_build: "5443737",
+      });
+      expect(parsed.app_information.instance_id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+      );
     });
 
-    it("should handle method spacing based on ID", () => {
-      const params = {
-        text: "Test text",
-        source_lang: "en",
-        target_lang: "zh",
-      };
+    it("should resolve legacy EN and PT targets to regional defaults", () => {
+      const en = JSON.parse(
+        buildRequestBody({ text: "Hello", source_lang: "auto", target_lang: "en" })
+      );
+      const pt = JSON.parse(
+        buildRequestBody({ text: "Hello", source_lang: "auto", target_lang: "pt" })
+      );
 
-      const body = buildRequestBody(params);
+      expect(en.target_lang).toBe("en-US");
+      expect(pt.target_lang).toBe("pt-BR");
+    });
 
-      // Should contain either "method": or "method" :
-      expect(body).toMatch(/"method"\s*:\s*"/);
+    it("should omit source_lang when auto-detecting", () => {
+      const parsed = JSON.parse(
+        buildRequestBody({ text: "Hello", source_lang: "auto", target_lang: "de" })
+      );
+
+      expect(parsed).not.toHaveProperty("source_lang");
+      expect(parsed.target_lang).toBe("de");
+    });
+
+    it("should reject unsupported target languages", () => {
+      expect(() =>
+        buildRequestBody({ text: "Hello", source_lang: "en", target_lang: "xx" })
+      ).toThrow(/Unsupported target_lang/);
     });
 
     it("should throw error for invalid parameters", () => {
-      expect(() => buildRequestBody({} as any)).toThrow();
-      expect(() => buildRequestBody({ text: "" } as any)).toThrow();
-      expect(() => buildRequestBody({ text: "   " } as any)).toThrow();
+      expect(() => buildRequestBody({} as RequestParams)).toThrow();
+      expect(() => buildRequestBody({ text: "" } as RequestParams)).toThrow();
+      expect(() => buildRequestBody({ text: "   " } as RequestParams)).toThrow();
+    });
+
+    it("should enforce the free-tier text length cap", () => {
+      const text = "a".repeat(MAX_FREE_TEXT_LENGTH + 1);
+
+      expect(() =>
+        buildRequestBody({ text, source_lang: "en", target_lang: "de" })
+      ).toThrow(/limit is 1500/);
     });
 
     it("should handle text length limits", () => {
@@ -93,24 +142,19 @@ describe("Query Module", () => {
 
   describe("query function", () => {
     it("should return error for missing text", async () => {
-      const result = await query({} as any);
+      const result = await query({} as RequestParams);
       expect(result).toBeValidErrorResponse();
       expect(result.code).toBe(400);
     });
 
     it("should handle successful translation", async () => {
-      const mockResponse = {
-        result: {
-          texts: [{ text: "你好世界" }],
-          lang: "ZH",
-        },
-        id: 12345,
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      } as any);
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({
+          translations: [
+            { text: "你好世界", detected_source_language: "en" },
+          ],
+        })
+      );
 
       const result = await query({
         text: "Hello world",
@@ -121,20 +165,63 @@ describe("Query Module", () => {
       expect(result).toBeValidTranslationResponse();
       expect(result.code).toBe(200);
       expect(result.data).toBe("你好世界");
+      expect(result.source_lang).toBe("EN");
+      expect(result.target_lang).toBe("ZH");
     });
 
-    it("should handle API errors", async () => {
-      const mockErrorResponse = {
-        error: {
-          code: 1156049,
-          message: "Invalid request format",
-        },
-      };
+    it("should send the iOS oneshot profile", async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({ translations: [{ text: "Hallo" }] })
+      );
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockErrorResponse),
-      } as any);
+      await query({
+        text: "Hello",
+        source_lang: "en",
+        target_lang: "de",
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [endpoint, init] = mockFetch.mock.calls[0];
+      const headers = (init as RequestInit).headers as Record<string, string>;
+
+      expect(endpoint).toBe("https://oneshot-free.www.deepl.com/v1/translate");
+      expect(headers.Authorization).toBe("None");
+      expect(headers["User-Agent"]).toMatch(/^DeepL\/.+ CFNetwork\/.+ Darwin\//);
+      expect(headers["x-app-os-version"]).toBe("26.0");
+      expect(headers["x-app-instance-id"]).toMatch(/^[0-9a-f-]{36}$/);
+      expect(headers["x-app-session-id"]).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it("should return 400 for unsupported target languages without calling upstream", async () => {
+      const result = await query({
+        text: "Hello",
+        source_lang: "en",
+        target_lang: "xx",
+      });
+
+      expect(result.code).toBe(400);
+      expect(result.data).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("should surface a 403 refusal without retrying", async () => {
+      mockFetch.mockResolvedValue(
+        jsonResponse({ title: "OutdatedClient" }, 403)
+      );
+
+      const result = await query({
+        text: "Hello world",
+        source_lang: "en",
+        target_lang: "zh",
+      });
+
+      expect(result.code).toBe(403);
+      expect(result.data).toBeNull();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should reject an invalid response structure", async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ translations: [] }, 200));
 
       const result = await query({
         text: "Hello world",
@@ -147,21 +234,7 @@ describe("Query Module", () => {
     });
 
     it("should handle network errors", async () => {
-      mockFetch.mockRejectedValueOnce(new Error("Network error"));
-
-      const result = await query({
-        text: "Hello world",
-        source_lang: "en",
-        target_lang: "zh",
-      });
-
-      expect(result).toBeValidErrorResponse();
-    });
-
-    it("should handle timeout errors", async () => {
-      const timeoutError = new Error("Request timed out");
-      timeoutError.name = "AbortError";
-      mockFetch.mockRejectedValueOnce(timeoutError);
+      mockFetch.mockRejectedValue(new Error("Network error"));
 
       const result = await query({
         text: "Hello world",
@@ -173,18 +246,11 @@ describe("Query Module", () => {
     });
 
     it("should use proxy when provided", async () => {
-      const mockResponse = {
-        result: {
-          texts: [{ text: "你好世界" }],
-          lang: "ZH",
-        },
-        id: 12345,
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      } as any);
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({
+          translations: [{ text: "你好世界", detected_source_language: "zh" }],
+        })
+      );
 
       await query(
         {

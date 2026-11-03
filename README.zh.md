@@ -113,9 +113,9 @@ graph TB
 
     %% 外部服务
     subgraph "外部翻译 API"
-        DeepLAPI[DeepL JSONRPC API<br/>www2.deepl.com]
+        DeepLAPI[DeepL oneshot API<br/>oneshot-free.www.deepl.com]
         GoogleAPI[Google 翻译 API<br/>translate.google.com]
-        XDPL[XDPL 代理集群<br/>多个 Vercel 实例]
+        XDPL[转发代理<br/>可选]
     end
 
     %% 请求流连接
@@ -440,21 +440,16 @@ npx wrangler deploy
 
 ## 代理端点部署
 
-为了获得最佳性能和稳定性，建议部署尽可能多的 [XDPL](https://github.com/xixu-me/XDPL) 代理端点：
-
-### 快速部署 XDPL
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/xixu-me/XDPL)
+`PROXY_URLS` 为可选项。每个条目必须是一个接受 DeepL **oneshot** 请求并转发到 `https://oneshot-free.www.deepl.com/v1/translate` 的 HTTP 端点，请求体与 DeepLX 发出的 JSON 相同（`text[]`、`target_lang`、`source_lang`、`usage_type`、`app_information`）。为已废弃的 JSON-RPC 后端（`/jsonrpc` 路径）编写的代理无法使用：DeepL 已不再响应该协议。
 
 ### 配置代理端点
 
-1. 部署多个 XDPL 实例
-2. 将部署后的 URL 添加到 DeepLX 的 `PROXY_URLS` 环境变量中：
+将部署后的 URL 添加到 DeepLX 的 `PROXY_URLS` 环境变量中：
 
 ```jsonc
 {
   "vars": {
-    "PROXY_URLS": "https://your-xdpl-1.vercel.app/jsonrpc,https://your-xdpl-2.vercel.app/jsonrpc,https://your-xdpl-3.vercel.app/jsonrpc,https://your-xdpl-n.vercel.app/jsonrpc"
+    "PROXY_URLS": "https://your-proxy-1.example.com/v1/translate,https://your-proxy-2.example.com/v1/translate"
   }
 }
 ```
@@ -721,7 +716,6 @@ curl -X POST https://your-domain.workers.dev/debug \
 - [OwO-Network/DeepLX](https://github.com/OwO-Network/DeepLX) - 原始实现，基于 Go 编程语言
 - [Cloudflare Workers](https://workers.cloudflare.com/) - 托管平台
 - [Hono](https://hono.dev/) - 快速 Web 框架
-- [XDPL](https://github.com/xixu-me/XDPL) - 代理端点解决方案
 
 ### 参与项目
 

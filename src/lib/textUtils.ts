@@ -3,6 +3,11 @@
  * Provides text chunking and validation to prevent 413 errors
  */
 
+import {
+  IOS_APP_BUILD,
+  IOS_APP_VERSION_FALLBACK,
+  IOS_OS_VERSION,
+} from "./const";
 import { PAYLOAD_LIMITS } from "./config";
 
 /**
@@ -19,17 +24,16 @@ export function estimatePayloadSize(
 ): number {
   // Create a sample request structure to estimate size
   const sampleRequest = {
-    jsonrpc: "2.0",
-    method: "LMT_handle_texts",
-    id: 123456789,
-    params: {
-      texts: [{ text, requestAlternatives: 0 }],
-      timestamp: Date.now(),
-      splitting: "newlines",
-      lang: {
-        source_lang_user_selected: sourceLang,
-        target_lang: targetLang,
-      },
+    text: [text],
+    target_lang: targetLang,
+    ...(sourceLang && sourceLang !== "auto" ? { source_lang: sourceLang } : {}),
+    usage_type: "translate",
+    app_information: {
+      os: "iOS",
+      os_version: IOS_OS_VERSION,
+      app_version: IOS_APP_VERSION_FALLBACK,
+      app_build: IOS_APP_BUILD,
+      instance_id: "00000000-0000-4000-8000-000000000000",
     },
   };
 

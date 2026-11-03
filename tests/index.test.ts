@@ -11,6 +11,12 @@ jest.mock("../src/lib", () => ({
   query: jest.fn(),
 }));
 
+// The route tests exercise routing and payload handling, not auth; the gate's
+// own behaviour is covered by tests/lib/apiKey.test.ts.
+jest.mock("../src/lib/apiKey", () => ({
+  rejectUnauthorized: jest.fn().mockReturnValue(null),
+}));
+
 jest.mock("../src/lib/security", () => ({
   getSecureClientIP: jest.fn().mockReturnValue("192.168.1.1"),
   handleCORSPreflight: jest
