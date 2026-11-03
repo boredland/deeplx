@@ -67,6 +67,19 @@ export async function resolveDeepLAppVersion(): Promise<string> {
 }
 
 /**
+ * Force the next resolution to re-read the App Store.
+ *
+ * Called when DeepL rejects the advertised profile (its outdated-client
+ * notice, or a 403): the version is the usual reason, so the next request
+ * should try the current release instead of waiting out the 24h cache. The
+ * last resolved version is kept, so a failed refetch still degrades to it.
+ */
+export function invalidateDeepLAppVersion(): void {
+  state.fetchedAt = 0;
+  state.attemptedAt = 0;
+}
+
+/**
  * Query Apple's lookup API for the DeepL iOS app and return its marketing
  * version. Throws on any failure; the caller decides what to fall back to.
  */

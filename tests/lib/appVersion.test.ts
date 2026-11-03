@@ -72,6 +72,24 @@ describe("resolveDeepLAppVersion", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  it("should refetch after the version is invalidated", async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        jsonResponse(appStoreResponse({ version: "26.60" }))
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(appStoreResponse({ version: "26.61" }))
+      );
+
+    const { resolveDeepLAppVersion, invalidateDeepLAppVersion } =
+      await loadProvider();
+
+    await expect(resolveDeepLAppVersion()).resolves.toBe("26.60");
+    invalidateDeepLAppVersion();
+    await expect(resolveDeepLAppVersion()).resolves.toBe("26.61");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
   it("should fall back to the pinned version when the lookup fails", async () => {
     mockFetch.mockRejectedValueOnce(new Error("network down"));
 

@@ -14,6 +14,7 @@ import type { RequestParams } from "../../src/lib/types";
 // keep this suite focused on the translation request itself.
 jest.mock("../../src/lib/appVersion", () => ({
   resolveDeepLAppVersion: jest.fn().mockResolvedValue("26.52"),
+  invalidateDeepLAppVersion: jest.fn(),
 }));
 
 /**
@@ -231,6 +232,27 @@ describe("Query Module", () => {
 
       expect(result).toBeValidErrorResponse();
       expect(result.code).toBeGreaterThanOrEqual(400);
+    });
+
+    it("should map DeepL's outdated-client notice to 502", async () => {
+      mockFetch.mockResolvedValue(
+        jsonResponse({
+          translations: [
+            {
+              text: "You're using an older version of DeepL. To continue using the app, please update to the latest version.",
+            },
+          ],
+        })
+      );
+
+      const result = await query({
+        text: "Hello world",
+        source_lang: "en",
+        target_lang: "zh",
+      });
+
+      expect(result.code).toBe(502);
+      expect(result.data).toBeNull();
     });
 
     it("should handle network errors", async () => {

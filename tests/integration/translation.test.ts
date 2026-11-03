@@ -8,6 +8,7 @@ import { API_URL } from "../../src/lib/const";
 // keep the translation flow deterministic.
 jest.mock("../../src/lib/appVersion", () => ({
   resolveDeepLAppVersion: jest.fn().mockResolvedValue("26.52"),
+  invalidateDeepLAppVersion: jest.fn(),
 }));
 
 describe("Translation Integration Tests", () => {

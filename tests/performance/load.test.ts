@@ -5,6 +5,7 @@
 // Keep the suite off the network: the version resolver has its own tests.
 jest.mock("../../src/lib/appVersion", () => ({
   resolveDeepLAppVersion: jest.fn().mockResolvedValue("26.52"),
+  invalidateDeepLAppVersion: jest.fn(),
 }));
 
 describe("Performance Tests", () => {

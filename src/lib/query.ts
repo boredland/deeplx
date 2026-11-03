@@ -17,7 +17,10 @@ import {
   IOS_OS_VERSION,
   MAX_FREE_TEXT_LENGTH,
 } from "./const";
-import { resolveDeepLAppVersion } from "./appVersion";
+import {
+  invalidateDeepLAppVersion,
+  resolveDeepLAppVersion,
+} from "./appVersion";
 import { createErrorResponse } from "./errorHandler";
 import { selectProxy } from "./proxyManager";
 import { checkCombinedRateLimit } from "./rateLimit";
@@ -285,6 +288,15 @@ function buildRequestBody(
 }
 
 /**
+ * DeepL answers clients whose advertised app version it considers stale with
+ * a translation-shaped notice (HTTP 200) instead of an error. Detect it in any
+ * of the languages it ships in, so it is never returned or cached as a
+ * translation.
+ */
+const OUTDATED_CLIENT_NOTICE =
+  /older version of deepl|ältere version von deepl|ancienne version de deepl|старую версию deepl|旧版本的 deepl|古いバージョンの deepl/i;
+
+/**
  * Validate an external JSON body as a oneshot translation response.
  */
 function isOneshotResponse(value: unknown): value is OneshotResponseParams {
@@ -421,8 +433,11 @@ async function query(
           }
 
           // 403 is DeepL refusing the client profile itself (auth failed,
-          // outdated client, or blocked) — not worth retrying blindly.
+          // outdated client, or blocked) — not worth retrying blindly, but
+          // drop the cached version so the next request can try the current
+          // release.
           if (response.status === 403) {
+            invalidateDeepLAppVersion();
             throw httpError(403, await forbiddenMessage(response));
           }
 
@@ -469,6 +484,17 @@ async function query(
       const translation = result.translations[0];
       if (!translation?.text) {
         throw httpError(502, "Invalid response structure from DeepL API");
+      }
+
+      // Never pass the notice off as a translation: it is an upstream client
+      // rejection wearing a 200 body. Refresh the advertised version so the
+      // next request can recover without a redeploy.
+      if (OUTDATED_CLIENT_NOTICE.test(translation.text)) {
+        invalidateDeepLAppVersion();
+        throw httpError(
+          502,
+          "DeepL rejected the advertised client version as outdated"
+        );
       }
 
       return createStandardResponse(

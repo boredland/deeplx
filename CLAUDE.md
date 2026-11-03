@@ -95,7 +95,7 @@ The worker includes a scheduled event handler that runs every 5 minutes (configu
 
 DeepL's free oneshot endpoint is undocumented and changes without notice:
 - **App version**: resolved at runtime from the App Store (`src/lib/appVersion.ts`), cached 24h, fallback to the pinned constant. A stale advertised version makes DeepL answer every request with 429.
-- **Protocol shape**: a scheduled GitHub Actions workflow (`.github/workflows/deepl-drift.yml`) translates a sentence through the worker daily and opens an issue when the response is not a real translation. It detects the failure mode that hides behind HTTP 200: DeepL's "older version of DeepL" notice.
+- **Protocol shape**: `query()` maps DeepL's "older version of DeepL" notice (a 200 body, not a translation) to 502 and refreshes the app-version cache. A scheduled GitHub Actions workflow (`.github/workflows/deepl-drift.yml`) translates a sentence through the worker daily and opens an issue when the response is not a real translation.
 
 ## Key Implementation Details
 
