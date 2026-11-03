@@ -488,8 +488,12 @@ async function query(
 
       // Never pass the notice off as a translation: it is an upstream client
       // rejection wearing a 200 body. Refresh the advertised version so the
-      // next request can recover without a redeploy.
-      if (OUTDATED_CLIENT_NOTICE.test(translation.text)) {
+      // next request can recover without a redeploy. A caller may legitimately
+      // translate the notice itself, so their own input does not count.
+      if (
+        !OUTDATED_CLIENT_NOTICE.test(params.text) &&
+        OUTDATED_CLIENT_NOTICE.test(translation.text)
+      ) {
         invalidateDeepLAppVersion();
         throw httpError(
           502,

@@ -255,6 +255,25 @@ describe("Query Module", () => {
       expect(result.data).toBeNull();
     });
 
+    it("should translate text that itself mentions the notice", async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({
+          translations: [
+            { text: "Sie verwenden eine ältere Version von DeepL." },
+          ],
+        })
+      );
+
+      const result = await query({
+        text: "You're using an older version of DeepL",
+        source_lang: "en",
+        target_lang: "de",
+      });
+
+      expect(result.code).toBe(200);
+      expect(result.data).toBe("Sie verwenden eine ältere Version von DeepL.");
+    });
+
     it("should handle network errors", async () => {
       mockFetch.mockRejectedValue(new Error("Network error"));
 
