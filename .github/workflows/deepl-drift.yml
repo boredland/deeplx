@@ -123,3 +123,17 @@ jobs:
             gh issue create --title "DeepL upstream drift detected" \
               --label deepl-drift --body "$BODY"
           fi
+
+      # Only the default branch: a manual run on a feature branch passing says
+      # nothing about whether the scheduled check is healthy again.
+      - name: Close resolved drift issues
+        if: success() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for N in $(gh issue list --label deepl-drift --state open --limit 100 \
+            --json number --jq '.[].number'); do
+            gh issue close "$N" --reason completed \
+              --comment "Drift check passes again: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          done
