@@ -55,10 +55,16 @@ jobs:
             npx wrangler dev --port 8799 --var API_KEYS:ci-drift-check \
               > /tmp/wrangler.log 2>&1 &
             echo "$!" > /tmp/wrangler.pid
+            UP=0
             for _ in $(seq 1 60); do
-              if curl -s -o /dev/null "http://127.0.0.1:8799/"; then break; fi
+              if curl -s -o /dev/null "http://127.0.0.1:8799/"; then UP=1; break; fi
               sleep 1
             done
+            if [ "$UP" != 1 ]; then
+              echo "::error::Local wrangler dev worker never came up"
+              cat /tmp/wrangler.log
+              exit 1
+            fi
           fi
 
           RESPONSE=$(curl -sS -m 60 -X POST "$ENDPOINT" \
