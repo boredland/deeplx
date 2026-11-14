@@ -370,12 +370,15 @@ async function query(
   };
 
   try {
-    // Resolved once per request so the User-Agent and body agree; the lookup
-    // itself is cached for a day in the isolate (appVersion.ts).
-    const appVersion = await resolveDeepLAppVersion();
-    const requestBody = buildRequestBody(params, appVersion);
-
     return await retryWithBackoff(async () => {
+      // Per attempt, not per request: a 429 can mean the advertised version is
+      // stale (see the 429 branch), and the retry must advertise the refreshed
+      // one. The lookup is cached for a day (appVersion.ts), so this is free
+      // unless the cache was just invalidated. Resolving here also keeps the
+      // User-Agent and the body in agreement on every attempt.
+      const appVersion = await resolveDeepLAppVersion();
+      const requestBody = buildRequestBody(params, appVersion);
+
       const proxy = config?.env ? await selectProxy(config.env) : null;
       const endpoint = config?.proxyEndpoint ?? proxy?.url ?? API_URL;
 
@@ -423,9 +426,12 @@ async function query(
 
           clearTimeout(timeoutId);
 
-          // 429 means the IP (or the advertised profile) is temporarily
-          // blocked upstream; surface it as a retryable rate-limit error.
+          // 429 means the IP is temporarily blocked upstream, or DeepL is
+          // rejecting a stale advertised version the same way
+          // (OwO-Network/DLX issue #236). The two look identical, so drop the
+          // cached version as well; the retry then resolves the current one.
           if (response.status === 429) {
+            invalidateDeepLAppVersion();
             throw httpError(
               429,
               "Too many requests, your IP has been blocked by DeepL temporarily, please don't request it frequently in a short time"
