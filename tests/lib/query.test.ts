@@ -7,6 +7,10 @@ import {
   normalizeLanguageCode,
   query,
 } from "../../src/lib/query";
+import {
+  invalidateDeepLAppVersion,
+  resolveDeepLAppVersion,
+} from "../../src/lib/appVersion";
 import { MAX_FREE_TEXT_LENGTH } from "../../src/lib/const";
 import type { RequestParams } from "../../src/lib/types";
 
@@ -219,6 +223,30 @@ describe("Query Module", () => {
       expect(result.code).toBe(403);
       expect(result.data).toBeNull();
       expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("should recover from an upstream 429 by advertising a refreshed app version", async () => {
+      (resolveDeepLAppVersion as jest.Mock)
+        .mockResolvedValueOnce("26.52")
+        .mockResolvedValueOnce("26.99");
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({}, 429))
+        .mockResolvedValueOnce(jsonResponse({ translations: [{ text: "Hallo" }] }));
+
+      const result = await query({
+        text: "Hello",
+        source_lang: "en",
+        target_lang: "de",
+      });
+
+      expect(result.code).toBe(200);
+      expect(invalidateDeepLAppVersion).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const userAgent = (url: number) =>
+        ((mockFetch.mock.calls[url][1] as RequestInit).headers as Record<string, string>)["User-Agent"];
+      expect(userAgent(0)).toContain("DeepL/26.52 ");
+      expect(userAgent(1)).toContain("DeepL/26.99 ");
+      expect(String(mockFetch.mock.calls[1][1]?.body)).toContain("26.99");
     });
 
     it("should reject an invalid response structure", async () => {
